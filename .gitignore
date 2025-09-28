@@ -61,7 +61,6 @@ config.cfg
 *.vcs
 
 # Unnecessary files
-*.lib
 *.filters
 *.vpc_crc
 *.sentinel
