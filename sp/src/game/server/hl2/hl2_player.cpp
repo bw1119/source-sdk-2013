@@ -92,6 +92,8 @@ ConVar sv_autojump( "sv_autojump", "0" );
 ConVar hl2_walkspeed( "hl2_walkspeed", "150" );
 ConVar hl2_normspeed( "hl2_normspeed", "190" );
 ConVar hl2_sprintspeed( "hl2_sprintspeed", "320" );
+ConVar mentations_suitless_sprint_allow("mentations_suitless_sprint_allow", "1", FCVAR_CHEAT);
+ConVar mentations_suitless_sprint_speed("mentations_suitless_sprint_speed", "270", FCVAR_CHEAT);											  
 
 ConVar hl2_darkness_flashlight_factor ( "hl2_darkness_flashlight_factor", "1" );
 
@@ -103,6 +105,7 @@ ConVar hl2_darkness_flashlight_factor ( "hl2_darkness_flashlight_factor", "1" );
 	#define	HL2_WALK_SPEED hl2_walkspeed.GetFloat()
 	#define	HL2_NORM_SPEED hl2_normspeed.GetFloat()
 	#define	HL2_SPRINT_SPEED hl2_sprintspeed.GetFloat()
+	#define MENTATIONS_SUITLESS_SPRINT_SPEED mentations_suitless_sprint_speed.GetFloat()  
 #endif
 
 ConVar player_showpredictedposition( "player_showpredictedposition", "0" );
@@ -760,8 +763,8 @@ void CHL2_Player::HandleSpeedChanges( void )
 
 	bool bCanSprint = CanSprint();
 	bool bIsSprinting = IsSprinting();
-	bool bWantSprint = ( bCanSprint && IsSuitEquipped() && (m_nButtons & IN_SPEED) );
-	if ( bIsSprinting != bWantSprint && (buttonsChanged & IN_SPEED) )
+	bool bWantSprint = (bCanSprint && (m_nButtons & IN_SPEED));
+	if (bIsSprinting != bWantSprint && (buttonsChanged & IN_SPEED))
 	{
 		// If someone wants to sprint, make sure they've pressed the button to do so. We want to prevent the
 		// case where a player can hold down the sprint key and burn tiny bursts of sprint as the suit recharges
@@ -792,7 +795,7 @@ void CHL2_Player::HandleSpeedChanges( void )
 	// have suit, pressing button, not sprinting or ducking
 	bool bWantWalking;
 	
-	if( IsSuitEquipped() )
+	if (IsSuitEquipped() || mentations_suitless_sprint_allow.GetBool() == true)
 	{
 		bWantWalking = (m_nButtons & IN_WALK) && !IsSprinting() && !(m_nButtons & IN_DUCK);
 	}
@@ -1617,8 +1620,7 @@ bool CHL2_Player::CanSprint()
 	return ( m_bSprintEnabled &&										// Only if sprint is enabled 
 			!IsWalking() &&												// Not if we're walking
 			!( m_Local.m_bDucked && !m_Local.m_bDucking ) &&			// Nor if we're ducking
-			(GetWaterLevel() != 3) &&									// Certainly not underwater
-			(GlobalEntity_GetState("suit_no_sprint") != GLOBAL_ON) );	// Out of the question without the sprint module
+			(GetWaterLevel() != 3));									// Certainly not underwater
 }
 
 //-----------------------------------------------------------------------------
@@ -1639,31 +1641,42 @@ void CHL2_Player::StartAutoSprint()
 
 //-----------------------------------------------------------------------------
 //-----------------------------------------------------------------------------
-void CHL2_Player::StartSprinting( void )
+																		   
+//Jhrino: In Mentations player can sprint without suit power at a slightly lower speed
+void CHL2_Player::StartSprinting(void)
 {
-	if( m_HL2Local.m_flSuitPower < 10 )
-	{
-		// Don't sprint unless there's a reasonable
-		// amount of suit power.
-		
-		// debounce the button for sound playing
-		if ( m_afButtonPressed & IN_SPEED )
+	bool hSuitlessSprint = mentations_suitless_sprint_allow.GetBool() && !IsSuitEquipped();
+
+	//Jhrino: this currently means you cant sprint if you dont have HEV energy!
+	if (!hSuitlessSprint)
+	{				  
+		if( m_HL2Local.m_flSuitPower < 10 )
 		{
-			CPASAttenuationFilter filter( this );
-			filter.UsePredictionRules();
-			EmitSound( filter, entindex(), "HL2Player.SprintNoPower" );
+			// Don't sprint unless there's a reasonable
+			// amount of suit power.
+			
+			// debounce the button for sound playing
+			if ( m_afButtonPressed & IN_SPEED )
+			{
+				CPASAttenuationFilter filter( this );
+				filter.UsePredictionRules();
+				EmitSound( filter, entindex(), "HL2Player.SprintNoPower" );
+			}
+			return;
 		}
-		return;
 	}
 
-	if( !SuitPower_AddDevice( SuitDeviceSprint ) )
-		return;
+	if (IsSuitEquipped())	  
+		if( !SuitPower_AddDevice( SuitDeviceSprint ) )
+			return;
 
 	CPASAttenuationFilter filter( this );
 	filter.UsePredictionRules();
 	EmitSound( filter, entindex(), "HL2Player.SprintStart" );
 
-	SetMaxSpeed( HL2_SPRINT_SPEED );
+	float hSprintSpeed = (hSuitlessSprint ? MENTATIONS_SUITLESS_SPRINT_SPEED : HL2_SPRINT_SPEED);
+
+	SetMaxSpeed(hSprintSpeed);
 	m_fIsSprinting = true;
 }
 
